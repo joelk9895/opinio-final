@@ -1,0 +1,150 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// NextAuth.js Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// Existing models with NextAuth.js updates
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(USER)
+  posts         Post[]
+  comments      Comment[]
+  votes         Vote[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  userCategories UserCategory[] // Added relation to UserCategory
+}
+
+// Category model for post categorization
+model Category {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  slug      String         @unique
+  posts     PostCategory[]
+  userCategories UserCategory[] // Added relation to UserCategory
+  isDefault Boolean        @default(false) // Added field for default categories
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model Post {
+  id          String         @id @default(cuid())
+  title       String
+  description String
+  status      String         @default("Open")
+  author      User           @relation(fields: [authorId], references: [id])
+  authorId    String
+  comments    Comment[]
+  votes       Vote[]
+  views       Int            @default(1)
+  categories  PostCategory[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// Join table for many-to-many relationship between Post and Category
+model PostCategory {
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId     String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+  assignedAt DateTime @default(now())
+
+  @@id([postId, categoryId])
+}
+
+// New join table for User and their selected/custom categories
+model UserCategory {
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId String
+  assignedAt DateTime @default(now())
+
+  @@id([userId, categoryId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  type      String // Added to store vote type (e.g., "UPVOTE" or "DOWNVOTE")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+/// Site settings for admin customization
+model Setting {
+  id        String   @id @default(cuid())
+  config    Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
